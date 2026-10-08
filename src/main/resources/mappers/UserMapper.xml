@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.map.egis.mapper.UserMapper">
+
+    <!-- 아이디로 회원 조회 -->
+    <select id="findByUserId" parameterType="String" resultType="com.map.egis.dto.UserDTO">
+        SELECT 
+            user_id,
+            password,
+            name,
+            created_at AS createdAt,
+            role,
+            account_status AS accountStatus,
+            failed_login_count AS failedLoginCount,
+            locked_at AS lockedAt,
+            last_login_at AS lastLoginAt
+        FROM users
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 회원 등록 -->
+    <insert id="insertUser" parameterType="com.map.egis.dto.UserDTO">
+        INSERT INTO users (user_id, password, name, created_at)
+        VALUES (#{userId}, #{password}, #{name}, NOW())
+    </insert>
+
+    <!-- 아이디 중복 개수 조회 -->
+    <select id="countByUserId" parameterType="string" resultType="int">
+        SELECT COUNT(*) 
+        FROM users 
+        WHERE user_id = #{userId}
+    </select>
+
+    <update id="recordFailedLogin">
+        UPDATE users
+        SET failed_login_count = failed_login_count + 1,
+            locked_at = CASE WHEN failed_login_count + 1 >= 5 THEN COALESCE(locked_at, NOW()) ELSE locked_at END
+        WHERE user_id = #{userId} AND account_status = 'ACTIVE' AND locked_at IS NULL
+    </update>
+
+    <update id="recordSuccessfulLogin">
+        UPDATE users
+        SET failed_login_count = 0, locked_at = NULL, last_login_at = NOW()
+        WHERE user_id = #{userId} AND account_status = 'ACTIVE' AND locked_at IS NULL
+    </update>
+    <select id="findAccessProfile" resultType="com.map.egis.dto.UserDTO">
+        SELECT user_id AS "userId", name, role, account_status AS "accountStatus", email
+        FROM users WHERE user_id = #{userId}
+    </select>
+    <select id="findByOidcIdentity" resultType="com.map.egis.dto.UserDTO">
+        SELECT user_id AS "userId", password, name, role, account_status AS "accountStatus",
+               oidc_issuer AS "oidcIssuer", oidc_subject AS "oidcSubject", email,
+               locked_at AS "lockedAt"
+        FROM users WHERE oidc_issuer=#{issuer} AND oidc_subject=#{subject}
+    </select>
+    <select id="findByEmail" resultType="com.map.egis.dto.UserDTO">
+        SELECT user_id AS "userId", password, name, role, account_status AS "accountStatus",
+               oidc_issuer AS "oidcIssuer", oidc_subject AS "oidcSubject", email,
+               locked_at AS "lockedAt"
+        FROM users WHERE LOWER(email)=LOWER(#{email}) ORDER BY created_at LIMIT 1
+    </select>
+    <select id="countByEmail" resultType="int">
+        SELECT COUNT(*) FROM users WHERE LOWER(email)=LOWER(#{email})
+    </select>
+    <update id="linkOidcIdentity">
+        UPDATE users SET oidc_issuer=#{issuer}, oidc_subject=#{subject}, email=COALESCE(email, #{email})
+        WHERE user_id=#{userId} AND oidc_issuer IS NULL AND oidc_subject IS NULL
+    </update>
+    <insert id="insertOidcUser">
+        INSERT INTO users(user_id,password,name,role,account_status,oidc_issuer,oidc_subject,email,created_at)
+        VALUES(#{userId},#{password},#{name},'USER','ACTIVE',#{issuer},#{subject},#{email},NOW())
+    </insert>
+
+</mapper>

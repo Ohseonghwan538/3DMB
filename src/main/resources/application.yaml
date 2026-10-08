@@ -1,0 +1,32 @@
+# 의존성 설정. 외부 시스템과의 연동을 위해 필요한 라이브러리들을 정의  
+spring:
+  application:
+    name: egis
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/map_db
+    username: postgres
+    password: 1234
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+mybatis:
+  type-aliases-package: com.map.egis.dto # DTO/Entity 패키지 경로
+  mapper-locations: classpath:/mappers/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+  public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8080}
+  oidc:
+    issuer: ${OIDC_ISSUER:}
+    client-id: ${OIDC_CLIENT_ID:}
+    client-secret: ${OIDC_CLIENT_SECRET:}
+    redirect-uri: ${OIDC_REDIRECT_URI:http://localhost:8080/oauth2/callback}
+  storage:
+    root: storage

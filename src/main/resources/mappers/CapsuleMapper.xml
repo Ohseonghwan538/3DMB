@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.map.egis.mapper.CapsuleMapper">
+
+    <!-- 1. Capsules 등록 (PostGIS ST_MakePoint 활용) -->
+    <insert id="insertCapsule" 
+            parameterType="com.map.egis.dto.CapsuleCreateRequest" 
+            useGeneratedKeys="true" 
+            keyProperty="capsuleId" 
+            keyColumn="capsule_id">
+        INSERT INTO capsules (
+            user_id, title, memo, location, longitude, latitude, altitude, started_at, ended_at, created_at, color
+        ) VALUES (
+            #{userId},
+            #{title},
+            #{memo},
+            CASE WHEN CAST(#{longitude,jdbcType=DOUBLE} AS DOUBLE PRECISION) IS NOT NULL
+                      AND CAST(#{latitude,jdbcType=DOUBLE} AS DOUBLE PRECISION) IS NOT NULL
+                 THEN ST_SetSRID(ST_MakePoint(#{longitude}, #{latitude}), 4326)
+                 ELSE NULL END,
+            #{longitude},
+            #{latitude},
+            #{altitude},
+            #{startedAt},
+            #{endedAt},
+            NOW(),
+            COALESCE(#{color}, '#4263EB')
+        )
+    </insert>
+
+    <!-- 2. Capsule Images 일괄 등록 -->
+    <insert id="insertCapsuleImages">
+        INSERT INTO capsule_images (
+            capsule_id, original_file_path, compressed_file_path, taken_at, created_at
+        ) VALUES
+        <foreach collection="images" item="img" separator=",">
+        (
+            #{capsuleId},
+            #{img.originalFilePath},
+            #{img.compressedFilePath},
+            #{img.takenAt},
+            NOW()
+        )
+        </foreach>
+    </insert>
+
+    <!-- ResultMap: Capsules와 Capsule_Images 1:N 매핑 -->
+    <resultMap id="CapsuleWithImagesResultMap" type="com.map.egis.dto.CapsuleResponse">
+        <id property="capsuleId" column="capsule_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="title" column="title"/>
+        <result property="memo" column="memo"/>
+        <result property="longitude" column="longitude"/>
+        <result property="latitude" column="latitude"/>
+        <result property="altitude" column="altitude"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="endedAt" column="ended_at"/>
+        <result property="createdAt" column="created_at"/>
+
+        <!-- N개의 이미지를 List<ImageResponse>에 매핑 -->
+        <collection property="images" ofType="com.map.egis.dto.CapsuleResponse$ImageResponse">
+            <id property="imageId" column="image_id"/>
+            <result property="originalFilePath" column="original_file_path"/>
+            <result property="compressedFilePath" column="compressed_file_path"/>
+            <result property="takenAt" column="taken_at"/>
+        </collection>
+    </resultMap>
+
+    <!-- PostGIS ST_MakeEnvelope 활용 범위 검색 -->
+    <select id="selectCapsulesInBounds" resultMap="CapsuleWithImagesResultMap">
+        SELECT 
+            c.capsule_id, c.user_id, c.title,
+            CASE WHEN c.memo_visibility = 'PUBLIC' AND c.memo_deleted_at IS NULL THEN c.memo ELSE NULL END AS memo,
+            c.longitude, c.latitude, c.altitude, 
+            c.started_at, c.ended_at, c.created_at,
+            i.image_id, i.original_file_path, i.compressed_file_path, i.taken_at
+        FROM capsules c
+        LEFT JOIN capsule_images i ON c.capsule_id = i.capsule_id AND i.deleted_at IS NULL AND i.visibility = 'PUBLIC'
+        WHERE ST_Contains(
+            ST_MakeEnvelope(#{minLng}, #{minLat}, #{maxLng}, #{maxLat}, 4326),
+            c.location
+        )
+          AND c.user_id = #{userId}
+          AND c.deleted_at IS NULL
+          AND c.visibility = 'PUBLIC'
+        ORDER BY c.created_at DESC, i.taken_at ASC
+        LIMIT 1000
+    </select>
+
+    <select id="countCapsuleByIdAndUserId" resultType="int">
+        SELECT COUNT(*) FROM capsules WHERE capsule_id = #{capsuleId} AND user_id = #{userId} AND deleted_at IS NULL
+    </select>
+    <select id="canReadImagePath" resultType="int">
+        SELECT COUNT(*)
+        FROM capsule_images i
+        JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE #{path} IN (i.original_file_path, i.compressed_file_path)
+          AND c.deleted_at IS NULL AND i.deleted_at IS NULL
+          AND (#{admin} = TRUE OR (c.user_id = #{userId} AND c.visibility = 'PUBLIC' AND i.visibility = 'PUBLIC'))
+    </select>
+
+    <select id="selectPoisInBounds" resultType="com.map.egis.dto.PoiResponse">
+        SELECT i.image_id AS "poiId", c.capsule_id AS "groupId", c.capsule_id AS "capsuleId",
+               c.title AS "groupName", c.color AS "groupColor",
+               COALESCE(i.title, c.title) AS title,
+               COALESCE(i.poi_memo, c.memo) AS content,
+               COALESCE(i.longitude, c.longitude) AS longitude,
+               COALESCE(i.latitude, c.latitude) AS latitude,
+               COALESCE(i.altitude, c.altitude, 0) AS altitude,
+               i.original_file_path AS "originalFilePath",
+               i.compressed_file_path AS "compressedFilePath",
+               i.taken_at AS "takenAt",
+               EXISTS(SELECT 1 FROM poi_shares s WHERE s.poi_id = i.image_id AND s.revoked_at IS NULL) AS shared
+        FROM capsule_images i
+        JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE c.user_id = #{userId} AND c.deleted_at IS NULL
+          AND i.deleted_at IS NULL AND i.location IS NOT NULL
+          AND i.location &amp;&amp; ST_MakeEnvelope(#{minLng}, #{minLat}, #{maxLng}, #{maxLat}, 4326)
+        <if test="groupIds != null and groupIds.size() > 0">
+          AND c.capsule_id IN
+          <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+              #{groupId}
+          </foreach>
+        </if>
+        ORDER BY i.image_id
+        LIMIT 1000
+    </select>
+
+    <select id="selectPoi" resultType="com.map.egis.dto.PoiResponse">
+        SELECT i.image_id AS "poiId", c.capsule_id AS "groupId", c.capsule_id AS "capsuleId",
+               c.title AS "groupName", c.color AS "groupColor",
+               COALESCE(i.title, c.title) AS title, COALESCE(i.poi_memo, c.memo) AS content,
+               COALESCE(i.longitude, c.longitude) AS longitude,
+               COALESCE(i.latitude, c.latitude) AS latitude,
+               COALESCE(i.altitude, c.altitude, 0) AS altitude,
+               i.original_file_path AS "originalFilePath",
+               i.compressed_file_path AS "compressedFilePath", i.taken_at AS "takenAt",
+               EXISTS(SELECT 1 FROM poi_shares s WHERE s.poi_id = i.image_id AND s.revoked_at IS NULL) AS shared
+        FROM capsule_images i JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE i.image_id = #{poiId} AND c.user_id = #{userId}
+          AND c.deleted_at IS NULL AND i.deleted_at IS NULL
+    </select>
+    <select id="selectPoiForUpdate" resultType="com.map.egis.dto.PoiResponse">
+        SELECT i.image_id AS "poiId", c.capsule_id AS "groupId", c.capsule_id AS "capsuleId",
+               c.title AS "groupName", c.color AS "groupColor",
+               COALESCE(i.title, c.title) AS title, COALESCE(i.poi_memo, c.memo) AS content,
+               COALESCE(i.longitude, c.longitude) AS longitude,
+               COALESCE(i.latitude, c.latitude) AS latitude,
+               COALESCE(i.altitude, c.altitude, 0) AS altitude,
+               i.original_file_path AS "originalFilePath",
+               i.compressed_file_path AS "compressedFilePath", i.taken_at AS "takenAt"
+        FROM capsule_images i JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE i.image_id = #{poiId} AND c.user_id = #{userId}
+          AND c.deleted_at IS NULL AND i.deleted_at IS NULL
+        FOR UPDATE OF i
+    </select>
+
+    <insert id="archivePoi">
+        INSERT INTO poi_history(poi_id,capsule_id,title,content,original_file_path,compressed_file_path,
+                                location,longitude,latitude,altitude,poi_updated_at,changed_by,change_type)
+        SELECT i.image_id, i.capsule_id, COALESCE(i.title,c.title,'나의 3D 추억'),
+               COALESCE(i.poi_memo,c.memo), i.original_file_path,i.compressed_file_path,
+               i.location,i.longitude,i.latitude,i.altitude,i.updated_at,#{changedBy},#{changeType}
+        FROM capsule_images i JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE i.image_id = #{poiId} AND c.user_id = #{userId}
+          AND i.deleted_at IS NULL AND c.deleted_at IS NULL
+    </insert>
+
+    <insert id="insertPoi">
+        INSERT INTO capsule_images(capsule_id, original_file_path, compressed_file_path, taken_at,
+                                   title, poi_memo, longitude, latitude, altitude, location)
+        SELECT #{capsuleId}, #{originalPath}, #{compressedPath}, NOW(), #{title}, #{content},
+               #{longitude}, #{latitude}, #{altitude},
+               ST_SetSRID(ST_MakePoint(#{longitude}, #{latitude}, #{altitude}), 4326)
+        WHERE EXISTS(SELECT 1 FROM capsules WHERE capsule_id = #{capsuleId} AND user_id = #{userId}
+                     AND deleted_at IS NULL)
+    </insert>
+    <select id="selectPoiIdByPath" resultType="long">
+        SELECT i.image_id
+        FROM capsule_images i JOIN capsules c ON c.capsule_id=i.capsule_id
+        WHERE i.original_file_path=#{originalPath} AND c.user_id=#{userId}
+        ORDER BY i.image_id DESC LIMIT 1
+    </select>
+    <select id="selectPoiHistory" resultType="map">
+        SELECT h.history_id AS "historyId", h.title, h.content, h.capsule_id AS "capsuleId",
+               h.original_file_path AS "originalFilePath", h.compressed_file_path AS "compressedFilePath",
+               h.longitude, h.latitude, h.altitude, h.change_type AS "changeType", h.archived_at AS "archivedAt"
+        FROM poi_history h JOIN capsules c ON c.capsule_id=h.capsule_id
+        WHERE h.poi_id=#{poiId} AND c.user_id=#{userId}
+        ORDER BY h.archived_at DESC
+    </select>
+    <select id="canReadPoiHistory" resultType="int">
+        SELECT COUNT(*) FROM capsule_images i
+        JOIN capsules c ON c.capsule_id=i.capsule_id
+        WHERE i.image_id=#{poiId} AND c.user_id=#{userId}
+    </select>
+
+    <update id="updatePoi">
+        UPDATE capsule_images i
+        SET title = #{title}, poi_memo = #{content}, capsule_id = #{groupId}, updated_at = NOW(),
+            original_file_path = COALESCE(#{originalPath,jdbcType=VARCHAR}, i.original_file_path),
+            compressed_file_path = COALESCE(#{compressedPath,jdbcType=VARCHAR}, i.compressed_file_path)
+        FROM capsules c, capsules destination
+        WHERE i.image_id = #{poiId} AND c.capsule_id = i.capsule_id
+          AND c.user_id = #{userId} AND c.deleted_at IS NULL AND i.deleted_at IS NULL
+          AND destination.capsule_id = #{groupId} AND destination.user_id = #{userId}
+          AND destination.deleted_at IS NULL
+    </update>
+
+    <update id="deletePoi">
+        UPDATE capsule_images i SET deleted_at = NOW(), visibility = 'PRIVATE'
+        FROM capsules c
+        WHERE i.image_id = #{poiId} AND c.capsule_id = i.capsule_id
+          AND c.user_id = #{userId} AND c.deleted_at IS NULL AND i.deleted_at IS NULL
+    </update>
+
+    <select id="selectGroups" resultType="map">
+        SELECT c.capsule_id AS "groupId", c.title AS name, c.color,
+               COUNT(i.image_id) FILTER (WHERE i.deleted_at IS NULL) AS "poiCount",
+               c.visibility
+        FROM capsules c LEFT JOIN capsule_images i ON i.capsule_id = c.capsule_id
+        WHERE c.user_id = #{userId} AND c.deleted_at IS NULL
+        GROUP BY c.capsule_id ORDER BY c.created_at DESC
+    </select>
+
+    <update id="updateGroup">
+        UPDATE capsules SET title=#{name}, color=#{color}, updated_at=NOW()
+        WHERE capsule_id=#{groupId} AND user_id=#{userId} AND deleted_at IS NULL
+    </update>
+    <update id="updateGroupVisibility">
+        UPDATE capsules SET visibility=#{visibility}, updated_at=NOW()
+        WHERE capsule_id=#{groupId} AND user_id=#{userId} AND deleted_at IS NULL
+    </update>
+    <update id="deleteGroup">
+        UPDATE capsules SET deleted_at=NOW(), updated_at=NOW(), visibility='PRIVATE'
+        WHERE capsule_id=#{groupId} AND user_id=#{userId} AND deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM capsule_images WHERE capsule_id=#{groupId} AND deleted_at IS NULL)
+    </update>
+    <select id="groupHasPois" resultType="int">
+        SELECT COUNT(*) FROM capsule_images i JOIN capsules c ON c.capsule_id=i.capsule_id
+        WHERE c.capsule_id=#{groupId} AND c.user_id=#{userId} AND c.deleted_at IS NULL AND i.deleted_at IS NULL
+    </select>
+
+    <insert id="insertShare">
+        INSERT INTO poi_shares(poi_id, owner_id, token_hash)
+        SELECT i.image_id, #{userId}, #{tokenHash}
+        FROM capsule_images i JOIN capsules c ON c.capsule_id=i.capsule_id
+        WHERE i.image_id=#{poiId} AND c.user_id=#{userId} AND i.deleted_at IS NULL AND c.deleted_at IS NULL
+    </insert>
+    <update id="revokeShares">
+        UPDATE poi_shares SET revoked_at=NOW()
+        WHERE poi_id=#{poiId} AND owner_id=#{userId} AND revoked_at IS NULL
+    </update>
+    <select id="selectSharedPoi" resultType="com.map.egis.dto.PoiResponse">
+        SELECT i.image_id AS "poiId", c.capsule_id AS "groupId", c.capsule_id AS "capsuleId",
+               c.title AS "groupName", c.color AS "groupColor", COALESCE(i.title,c.title) AS title,
+               COALESCE(i.poi_memo,c.memo) AS content, COALESCE(i.longitude,c.longitude) AS longitude,
+               COALESCE(i.latitude,c.latitude) AS latitude, COALESCE(i.altitude,c.altitude,0) AS altitude,
+               i.original_file_path AS "originalFilePath", i.compressed_file_path AS "compressedFilePath",
+               i.taken_at AS "takenAt", TRUE AS shared
+        FROM poi_shares s JOIN capsule_images i ON i.image_id=s.poi_id
+        JOIN capsules c ON c.capsule_id=i.capsule_id
+        WHERE s.token_hash=#{tokenHash} AND s.revoked_at IS NULL
+          AND i.deleted_at IS NULL AND c.deleted_at IS NULL
+    </select>
+
+    <update id="appendMemo">
+        UPDATE capsules SET memo = CASE
+            WHEN COALESCE(memo, '') = '' THEN #{memo}
+            WHEN #{memo} = '' THEN memo
+            ELSE memo || E'\n\n' || #{memo}
+        END,
+        location = COALESCE(location, CASE WHEN CAST(#{longitude,jdbcType=DOUBLE} AS DOUBLE PRECISION) IS NOT NULL
+            AND CAST(#{latitude,jdbcType=DOUBLE} AS DOUBLE PRECISION) IS NOT NULL
+            THEN ST_SetSRID(ST_MakePoint(#{longitude}, #{latitude}), 4326) ELSE NULL END),
+        longitude = COALESCE(longitude, #{longitude}),
+        latitude = COALESCE(latitude, #{latitude}),
+        altitude = COALESCE(altitude, #{altitude})
+        WHERE capsule_id = #{capsuleId} AND user_id = #{userId}
+    </update>
+
+    <select id="selectCapsulesByUserId" resultMap="CapsuleWithImagesResultMap">
+        SELECT c.capsule_id, c.user_id, c.title,
+               CASE WHEN c.memo_visibility = 'PUBLIC' AND c.memo_deleted_at IS NULL THEN c.memo ELSE NULL END AS memo,
+               c.longitude, c.latitude, c.altitude, c.started_at, c.ended_at, c.created_at,
+               i.image_id, i.original_file_path, i.compressed_file_path, i.taken_at
+        FROM capsules c
+        LEFT JOIN capsule_images i ON c.capsule_id = i.capsule_id AND i.deleted_at IS NULL AND i.visibility = 'PUBLIC'
+        WHERE c.user_id = #{userId} AND c.deleted_at IS NULL AND c.visibility = 'PUBLIC'
+        ORDER BY c.created_at DESC, i.taken_at ASC
+    </select>
+
+</mapper>

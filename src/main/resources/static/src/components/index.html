@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Digital Time Capsule</title>
+  <link rel="stylesheet" href="/src/components/style.css">
+  <link rel="stylesheet" href="/src/components/shared.css">
+  <link rel="icon" href="/src/components/favicon.ico" type="image/x-icon">
+</head>
+<body>
+  <div id="map" aria-label="3D 지도"></div>
+  <div id="poi-overlay-container" aria-live="polite"></div>
+
+  <div class="map-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">✦</span> 3D Memory Box
+        <span class="brand-sub">나만의 3D 추억 지도</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <button class="icon-button" id="tgl-sidebar" type="button" aria-label="패널 열기" aria-expanded="true">☰</button>
+      <a class="user-menu" id="admin-link" href="/admin" hidden>
+        <span>⚙</span><span>관리자</span>
+      </a>
+      <button class="user-menu" id="btn-logout" type="button">
+        <span class="avatar">◉</span>
+        <span>로그아웃</span>
+      </button>
+    </header>
+
+    <aside id="sidebar" class="side-panel" aria-label="지도 도구"></aside>
+
+    <nav class="map-actions" aria-label="지도 도구">
+      <button class="tool-button" id="home-view" type="button" title="초기 위치">⌂</button>
+      <button class="tool-button" id="fullscreen" type="button" title="전체 화면">⛶</button>
+    </nav>
+
+    <div class="map-status">
+      <span class="status-dot"></span>
+      <span id="map-status-text">지도 엔진 연결 중</span>
+    </div>
+
+    <div class="map-loader" id="map-loader">
+      <div class="loader-card">
+        <div class="loader-spinner"></div>
+        <p>3D 지도를 준비하고 있어요</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/src/js/engine/XDWorldEM.js" defer></script>
+  <script src="/src/js/module.js" defer></script>
+  <script type="module" src="/src/js/main.js"></script>
+  <script type="module" src="/src/js/capsuleHistory.js"></script>
+  <script src="/src/utils/sidebar.js" defer></script>
+</body>
+</html>

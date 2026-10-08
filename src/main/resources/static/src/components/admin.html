@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관리자 콘솔 | 3D Memory Box</title>
+  <link rel="stylesheet" href="/src/components/admin.css">
+</head>
+<body class="admin-page">
+  <aside class="admin-sidebar">
+    <a class="admin-brand" href="/main">
+      <span class="brand-mark">✦</span>
+      <span>3D Memory Box<small>ADMIN CONSOLE</small></span>
+    </a>
+    <nav aria-label="관리자 메뉴">
+      <button class="nav-item is-active" data-view="dashboard"><span>◫</span> 에러·결함 대시보드</button>
+      <button class="nav-item" data-view="users"><span>♙</span> 회원·계정 관리</button>
+      <button class="nav-item" data-view="content"><span>▣</span> 추억·스토리지 관리</button>
+    </nav>
+    <a class="back-to-map" href="/main">← 지도 화면으로</a>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div>
+        <p class="eyebrow">ADMINISTRATION</p>
+        <h1 id="page-title">에러 로그 · 결함 추적</h1>
+      </div>
+      <div class="admin-account">
+        <span class="avatar">◉</span>
+        <span><strong id="admin-user-name">관리자</strong><small id="admin-role">ADMIN</small></span>
+        <button class="secondary-button" id="logout-button" type="button">로그아웃</button>
+      </div>
+    </header>
+
+    <div id="admin-toast" class="admin-toast" role="status" aria-live="polite"></div>
+
+    <section class="admin-view is-visible" id="view-dashboard">
+      <div class="view-toolbar">
+        <div><h2>운영 현황</h2><p>최근 에러 발생과 결함 조치 상태를 확인합니다.</p></div>
+        <label class="inline-filter">조회 기간
+          <select id="error-days"><option value="1">최근 24시간</option><option value="7">최근 7일</option><option value="30">최근 30일</option></select>
+        </label>
+      </div>
+      <div class="summary-grid" id="dashboard-summary"></div>
+      <div class="dashboard-grid">
+        <section class="panel">
+          <div class="panel-heading"><div><h3>도메인별 에러 빈도</h3><p>에러 코드를 선택하면 발생 내역을 확인할 수 있습니다.</p></div></div>
+          <div id="error-chart" class="error-chart"></div>
+        </section>
+        <section class="panel defect-status-panel">
+          <div class="panel-heading"><div><h3>결함 조치 현황</h3><p>상태별 누적 건수</p></div></div>
+          <div id="defect-status-chart"></div>
+          <div id="defect-legend" class="defect-legend"></div>
+          <div id="error-defect-links" class="error-defect-links"></div>
+        </section>
+      </div>
+      <section class="panel table-panel">
+        <div class="panel-heading"><div><h3>결함대장</h3><p>D-001 ~ D-006 · 상태 변경은 ADMIN 이상</p></div></div>
+        <div class="table-scroll"><table><thead><tr><th>ID</th><th>화면 · 요소</th><th>증상</th><th>관련 에러</th><th>해결 방안</th><th>상태</th></tr></thead><tbody id="defects-table"></tbody></table></div>
+      </section>
+    </section>
+
+    <section class="admin-view" id="view-users">
+      <div class="view-toolbar"><div><h2>회원 · 계정 관리</h2><p>회원 상태, 관리자 역할과 로그인 잠금을 관리합니다.</p></div></div>
+      <div class="summary-grid" id="user-summary"></div>
+      <div class="admin-workspace">
+        <section class="panel list-panel">
+          <form id="user-filter" class="filter-row">
+            <input name="q" placeholder="아이디 또는 이름 검색">
+            <select name="status"><option value="">전체 상태</option><option value="ACTIVE">정상</option><option value="SUSPENDED">일시정지</option><option value="WITHDRAWN">탈퇴</option></select>
+            <select name="role"><option value="">전체 권한</option><option>SUPER_ADMIN</option><option>ADMIN</option><option>MODERATOR</option><option>USER</option></select>
+            <button class="primary-button" type="submit">조회</button>
+          </form>
+          <div class="table-scroll"><table><thead><tr><th>아이디</th><th>이름</th><th>상태</th><th>권한</th><th>최근 로그인</th><th>로그인 실패</th><th>작업</th></tr></thead><tbody id="users-table"></tbody></table></div>
+          <div class="pagination"><button class="secondary-button" id="users-prev" type="button">이전</button><span id="users-page">1</span><button class="secondary-button" id="users-next" type="button">다음</button></div>
+        </section>
+        <aside class="panel detail-panel" id="user-detail"><div class="empty-detail">회원 목록에서 회원을 선택하세요.</div></aside>
+      </div>
+    </section>
+
+    <section class="admin-view" id="view-content">
+      <div class="view-toolbar"><div><h2>추억 그룹 · 게시물 · 스토리지</h2><p>사용자 콘텐츠를 검토하고 저장소 상태를 관리합니다.</p></div></div>
+      <div class="summary-grid" id="storage-summary"></div>
+      <div class="admin-workspace content-workspace">
+        <section class="panel list-panel">
+          <div class="tabs" role="tablist">
+            <button class="tab-button is-active" data-tab="groups" type="button">추억 그룹</button>
+            <button class="tab-button" data-tab="photos" type="button">사진</button>
+            <button class="tab-button" data-tab="memos" type="button">메모</button>
+          </div>
+          <form id="content-filter" class="filter-row"><input name="q" placeholder="그룹명, 소유자 또는 내용 검색"><button class="primary-button" type="submit">조회</button></form>
+          <div class="table-scroll"><table><thead id="content-head"></thead><tbody id="content-table"></tbody></table></div>
+          <div class="pagination"><button class="secondary-button" id="content-prev" type="button">이전</button><span id="content-page">1</span><button class="secondary-button" id="content-next" type="button">다음</button></div>
+        </section>
+        <aside class="panel storage-panel">
+          <div class="panel-heading"><div><h3>파일 상태</h3><p>DB 연결 경로와 저장소 파일을 대조합니다.</p></div></div>
+          <div class="storage-progress-list" id="storage-progress"></div>
+          <div class="content-detail-box" id="content-detail"><span>행을 선택하면 상세 정보가 표시됩니다.</span></div>
+          <div class="storage-actions">
+            <button class="secondary-button" id="recompress-button" type="button">재압축 실행</button>
+            <button class="danger-button" id="cleanup-button" type="button">고아 파일 정리</button>
+          </div>
+          <div class="storage-file-list"><h4>파일 진단 <span id="storage-file-count"></span></h4><div id="storage-files"></div></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title">작업 확인</h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel">취소</button><button class="danger-button" id="confirm-accept" value="confirm">확인</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="/src/js/admin.js"></script>
+</body>
+</html>

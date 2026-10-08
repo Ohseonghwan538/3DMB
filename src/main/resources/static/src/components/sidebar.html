@@ -1,0 +1,45 @@
+<div class="panel-head">
+  <div>
+    <p class="eyebrow">MY JOURNEY</p>
+    <h1>3D Memory Box</h1>
+  </div>
+  <button class="icon-button" id="btn-sidebar-close" type="button" aria-label="패널 닫기">×</button>
+</div>
+
+<section class="panel-section">
+  <p class="section-title">MAP LAYERS</p>
+  <div class="layer-row">
+    <span>3D 건물</span>
+    <button id="tgl-building" class="switch" type="button" role="switch" aria-checked="true"></button>
+  </div>
+  <p class="layer-description">여행의 장소를 입체적으로 둘러보세요.</p>
+</section>
+
+<section class="panel-section memory-panel">
+  <p class="section-title">MEMORIES</p>
+  <div id="memory-workspace">
+    <label class="field-label" for="memory-group">추억 묶음 선택</label>
+    <select id="memory-group" class="field-control">
+      <option value="">추억을 선택하세요</option>
+    </select>
+    <button class="text-button" id="refresh-memories" type="button">목록 새로고침</button>
+    <div id="memory-group-list" class="memory-group-list" aria-label="지도에 표시할 추억 묶음"></div>
+    <button class="memory-create" id="btn-start-memory" type="button">+ 새 추억 시작하기</button>
+
+    <form id="memory-upload">
+      <label class="field-label" for="file-photo">사진</label>
+      <input id="file-photo" class="file-control" name="file" type="file" accept="image/jpeg,image/png" required>
+
+      <label class="field-label" for="memory-title">제목</label>
+      <input id="memory-title" class="field-control" name="title" maxlength="100" required placeholder="이 추억의 제목">
+      
+      <label class="field-label" for="memory-memo">이 순간의 기록</label>
+      <textarea id="memory-memo" class="field-control memo-control" maxlength="2000" placeholder="그날의 감정과 기억을 남겨 보세요."></textarea>
+      
+      <p id="memory-gps-status" class="memory-feedback" aria-live="polite">사진의 GPS 위치를 확인하면 저장할 수 있습니다.</p>
+      <button id="btn-save-memory" class="memory-create" type="submit" disabled>사진과 기록 저장</button>
+    </form>
+    
+    <p id="memory-feedback" class="memory-feedback" aria-live="polite"></p>
+  </div>
+</section>

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.map.egis.mapper.AdminMapper">
+    <select id="selectUserSummary" resultType="map">
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE account_status = 'ACTIVE') AS active,
+               COUNT(*) FILTER (WHERE account_status = 'SUSPENDED') AS suspended,
+               COUNT(*) FILTER (WHERE account_status = 'WITHDRAWN') AS withdrawn,
+               COUNT(*) FILTER (WHERE locked_at IS NOT NULL) AS locked
+        FROM users
+    </select>
+
+    <select id="selectUsers" resultType="map">
+        SELECT user_id AS "userId", name, account_status AS status, role,
+               last_login_at AS "lastLoginAt", failed_login_count AS "failedLoginCount",
+               locked_at AS "lockedAt"
+        FROM users
+        WHERE (#{query} = '' OR user_id ILIKE '%' || #{query} || '%' OR name ILIKE '%' || #{query} || '%')
+          AND (#{status} = '' OR account_status = #{status})
+          AND (#{role} = '' OR role = #{role})
+          AND (#{locked} = FALSE OR locked_at IS NOT NULL)
+        ORDER BY created_at DESC, user_id
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectUser" resultType="map">
+        SELECT user_id AS "userId", name, account_status AS status, role,
+               last_login_at AS "lastLoginAt", failed_login_count AS "failedLoginCount",
+               locked_at AS "lockedAt"
+        FROM users WHERE user_id = #{userId}
+    </select>
+
+    <update id="updateAccountStatus">
+        UPDATE users SET account_status = #{status} WHERE user_id = #{userId}
+    </update>
+    <update id="updateRole">
+        UPDATE users SET role = #{role} WHERE user_id = #{userId}
+    </update>
+    <update id="unlockUser">
+        UPDATE users SET failed_login_count = 0, locked_at = NULL WHERE user_id = #{userId}
+    </update>
+    <select id="countActiveSuperAdmins" resultType="int">
+        SELECT COUNT(*) FROM users WHERE role = 'SUPER_ADMIN' AND account_status = 'ACTIVE'
+    </select>
+
+    <select id="selectContentSummary" resultType="map">
+        SELECT
+            0 AS originalBytes,
+            0 AS compressedBytes,
+            (SELECT COUNT(*) FROM capsules c WHERE c.deleted_at IS NULL) AS groupCount,
+            (SELECT COUNT(*) FROM capsule_reports r WHERE r.status = 'PENDING') AS reviewCount
+    </select>
+
+    <select id="selectGroups" resultType="map">
+        SELECT c.capsule_id AS "groupId", c.title AS name, c.user_id AS owner,
+               COUNT(DISTINCT ci.image_id) FILTER (WHERE ci.deleted_at IS NULL) AS photoCount,
+               COUNT(DISTINCT NULLIF(BTRIM(c.memo), '')) FILTER (WHERE c.memo_deleted_at IS NULL) AS memoCount,
+               c.visibility AS status,
+               COUNT(DISTINCT r.report_id) FILTER (WHERE r.status = 'PENDING') AS reportCount,
+               STRING_AGG(DISTINCT r.reason, ' · ') FILTER (WHERE r.status = 'PENDING') AS "reportReasons"
+        FROM capsules c
+        LEFT JOIN capsule_images ci ON ci.capsule_id = c.capsule_id
+        LEFT JOIN capsule_reports r ON r.capsule_id = c.capsule_id
+        WHERE c.deleted_at IS NULL AND (#{query} = '' OR c.title ILIKE '%' || #{query} || '%' OR c.user_id ILIKE '%' || #{query} || '%')
+        GROUP BY c.capsule_id
+        ORDER BY c.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectPhotos" resultType="map">
+        SELECT ci.image_id AS "imageId", c.title AS "groupName", c.user_id AS owner,
+               ci.original_file_path AS "originalPath", ci.compressed_file_path AS "compressedPath",
+               ci.visibility AS status, ci.taken_at AS "createdAt"
+        FROM capsule_images ci JOIN capsules c ON c.capsule_id = ci.capsule_id
+        WHERE ci.deleted_at IS NULL AND c.deleted_at IS NULL
+          AND (#{query} = '' OR c.title ILIKE '%' || #{query} || '%' OR c.user_id ILIKE '%' || #{query} || '%')
+        ORDER BY ci.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectMemos" resultType="map">
+        SELECT c.capsule_id AS "groupId", c.title AS "groupName", c.user_id AS owner,
+               c.memo, c.memo_visibility AS status, c.created_at AS "createdAt"
+        FROM capsules c
+        WHERE c.deleted_at IS NULL AND c.memo_deleted_at IS NULL
+          AND COALESCE(BTRIM(c.memo), '') &lt;&gt; ''
+          AND (#{query} = '' OR c.title ILIKE '%' || #{query} || '%' OR c.user_id ILIKE '%' || #{query} || '%' OR c.memo ILIKE '%' || #{query} || '%')
+        ORDER BY c.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <update id="setGroupVisibility">
+        UPDATE capsules SET visibility = #{visibility} WHERE capsule_id = #{groupId} AND deleted_at IS NULL
+    </update>
+    <update id="deleteGroup">
+        UPDATE capsules SET deleted_at = NOW(), visibility = 'PRIVATE' WHERE capsule_id = #{groupId} AND deleted_at IS NULL
+    </update>
+    <update id="setPhotoVisibility">
+        UPDATE capsule_images SET visibility = #{visibility} WHERE image_id = #{imageId} AND deleted_at IS NULL
+    </update>
+    <update id="deletePhoto">
+        UPDATE capsule_images SET deleted_at = NOW(), visibility = 'PRIVATE' WHERE image_id = #{imageId} AND deleted_at IS NULL
+    </update>
+    <update id="setMemoVisibility">
+        UPDATE capsules SET memo_visibility = #{visibility} WHERE capsule_id = #{groupId}
+          AND deleted_at IS NULL AND memo_deleted_at IS NULL AND COALESCE(BTRIM(memo), '') &lt;&gt; ''
+    </update>
+    <update id="deleteMemo">
+        UPDATE capsules SET memo_deleted_at = NOW(), memo_visibility = 'PRIVATE'
+        WHERE capsule_id = #{groupId} AND deleted_at IS NULL AND memo_deleted_at IS NULL
+          AND COALESCE(BTRIM(memo), '') &lt;&gt; ''
+    </update>
+
+    <select id="selectLinkedFiles" resultType="map">
+        SELECT i.original_file_path AS path, 'original' AS kind
+        FROM capsule_images i JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE i.deleted_at IS NULL AND c.deleted_at IS NULL
+        UNION ALL
+        SELECT i.compressed_file_path AS path, 'compressed' AS kind
+        FROM capsule_images i JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE i.deleted_at IS NULL AND c.deleted_at IS NULL
+    </select>
+    <select id="selectImagePairs" resultType="map">
+        SELECT i.original_file_path AS "originalPath", i.compressed_file_path AS "compressedPath"
+        FROM capsule_images i JOIN capsules c ON c.capsule_id = i.capsule_id
+        WHERE i.deleted_at IS NULL AND c.deleted_at IS NULL
+    </select>
+
+    <select id="selectDashboardSummary" resultType="map">
+        SELECT COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS errors24h,
+               (SELECT COUNT(*) FROM admin_defect WHERE status &lt;&gt; 'DONE') AS openDefects,
+               (SELECT COUNT(*) FROM admin_defect WHERE status = 'IN_PROGRESS') AS inProgress,
+               (SELECT COUNT(*) FROM admin_defect WHERE status = 'DONE') AS completed,
+               COALESCE((SELECT domain FROM admin_error_log WHERE created_at >= NOW() - INTERVAL '24 hours'
+                         GROUP BY domain ORDER BY COUNT(*) DESC, domain LIMIT 1), '-') AS topDomain
+        FROM admin_error_log
+        WHERE created_at >= NOW() - (#{days} || ' days')::interval
+    </select>
+
+    <select id="selectErrorCounts" resultType="map">
+        SELECT domain, error_code AS code, COUNT(*) AS count
+        FROM admin_error_log
+        WHERE created_at >= NOW() - (#{days} || ' days')::interval
+        GROUP BY domain, error_code
+        ORDER BY domain, error_code
+    </select>
+    <select id="selectErrorDetails" resultType="map">
+        SELECT error_code AS code, domain, message, created_at AS "createdAt"
+        FROM admin_error_log
+        WHERE error_code = #{code} AND created_at >= NOW() - (#{days} || ' days')::interval
+        ORDER BY created_at DESC
+        LIMIT 100
+    </select>
+    <select id="selectDefects" resultType="map">
+        SELECT defect_id AS id, screen_element AS element, symptom, related_errors AS "relatedErrors",
+               status, resolution, updated_at AS "updatedAt"
+        FROM admin_defect ORDER BY defect_id
+    </select>
+    <update id="updateDefectStatus">
+        UPDATE admin_defect SET status = #{status}, updated_at = NOW() WHERE defect_id = #{defectId}
+    </update>
+
+    <insert id="insertAudit">
+        INSERT INTO admin_audit_log(actor_id, action, target_type, target_id, details)
+        VALUES (#{actorId}, #{action}, #{targetType}, #{targetId},
+                jsonb_build_object('message', #{details}))
+    </insert>
+    <insert id="insertError">
+        INSERT INTO admin_error_log(error_code, domain, message) VALUES (#{code}, #{domain}, #{message})
+    </insert>
+</mapper>
