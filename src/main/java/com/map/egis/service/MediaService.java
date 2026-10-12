@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
@@ -54,7 +55,6 @@ public class MediaService {
         String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
         String sourceName = UUID.randomUUID() + ".upload";
         Path source = storageProperties.originalDirectory().resolve(date).resolve(sourceName);
-        String extension = "jpg";
         Path original = null;
         String previewName = UUID.randomUUID() + ".webp";
         Path compressed = storageProperties.compressedDirectory().resolve(date).resolve(previewName);
@@ -63,14 +63,23 @@ public class MediaService {
             Files.createDirectories(source.getParent());
             Files.createDirectories(compressed.getParent());
             file.transferTo(source);
+
             BufferedImageInfo imageInfo = inspect(source);
-            extension = imageInfo.format();
+            String extension = imageInfo.format();
             Gps gps = gps(source);
+
+            // 1. 원본 저장: 바이너리 복사를 통해 EXIF 메타데이터 100% 보존
             original = storageProperties.originalDirectory().resolve(date).resolve(UUID.randomUUID() + "." + extension);
-            normalize(source, original, extension, imageInfo.orientation());
-            Thumbnails.of(original.toFile()).size(1280, 1280).outputFormat("webp").outputQuality(0.82).toFile(compressed.toFile());
-            return new UploadedImage("/images/original/" + date + "/" + original.getFileName(),
-                    "/images/compressed/" + date + "/" + previewName, gps.latitude(), gps.longitude(), gps.altitude());
+            Files.copy(source, original, StandardCopyOption.REPLACE_EXISTING);
+
+            // 2. 압축본 생성: 전담 변환 함수 호출 (EXIF 보정 + WebP 변환)
+            normalize(original, compressed, imageInfo.orientation());
+
+            return new UploadedImage(
+                    "/images/original/" + date + "/" + original.getFileName(),
+                    "/images/compressed/" + date + "/" + previewName,
+                    gps.latitude(), gps.longitude(), gps.altitude()
+            );
         } catch (IOException | RuntimeException error) {
             delete(source); delete(original); delete(compressed);
             if (error instanceof IllegalArgumentException invalid) throw invalid;
@@ -136,16 +145,27 @@ public class MediaService {
         return new BufferedImageInfo(format, orientation);
     }
 
-    private void normalize(Path source, Path target, String format, int orientation) throws IOException {
-        int rotation = switch (orientation) {
+    // 이미지 정규화: EXIF Orientation에 따라 회전 및 반전 적용
+    private void normalize(Path source, Path target, int orientation) throws IOException {
+        int exifRotation = switch (orientation) {
             case 3, 4 -> 180;
             case 5, 6 -> 90;
             case 7, 8 -> 270;
             default -> 0;
         };
-        Thumbnails.Builder<?> builder = Thumbnails.of(source.toFile()).scale(1.0);
-        if (rotation != 0) builder.rotate(rotation);
-        builder.outputFormat(format).toFile(target.toFile());
+
+        // // EXIF 정방향 보정각 + 반시계 90도 회전(시계방향 270도)
+        // int finalRotation = (exifRotation + 270) % 360;
+
+        var builder = Thumbnails.of(source.toFile())
+                .useExifOrientation(false) // 회전 각도를 직접 계산하므로 라이브러리 자동 보정 비활성화
+                .size(1280, 1280);
+
+        if (exifRotation != 0) builder.rotate(exifRotation);
+
+        builder.outputFormat("webp")
+            .outputQuality(0.1)
+            .toFile(target.toFile());
     }
 
     private void delete(Path path) {

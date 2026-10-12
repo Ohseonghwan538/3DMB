@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.map.egis.festival.mapper.FestivalMapper">
+  <resultMap id="festivalMarker" type="com.map.egis.festival.dto.FestivalMarkerDto">
+    <constructor>
+      <idArg column="id" javaType="_long"/>
+      <arg column="name" javaType="string"/>
+      <arg column="lat" javaType="_double"/>
+      <arg column="lng" javaType="_double"/>
+      <arg column="type_code" javaType="string"/>
+      <arg column="icon_url" javaType="string"/>
+      <arg column="start_date" javaType="java.time.LocalDate"/>
+      <arg column="end_date" javaType="java.time.LocalDate"/>
+    </constructor>
+  </resultMap>
+  <resultMap id="festivalDetail" type="com.map.egis.festival.dto.FestivalDetailDto">
+    <constructor>
+      <idArg column="id" javaType="_long"/>
+      <arg column="name" javaType="string"/>
+      <arg column="venue" javaType="string"/>
+      <arg column="road_addr" javaType="string"/>
+      <arg column="start_date" javaType="java.time.LocalDate"/>
+      <arg column="end_date" javaType="java.time.LocalDate"/>
+      <arg column="content" javaType="string"/>
+      <arg column="host_org" javaType="string"/>
+      <arg column="mng_org" javaType="string"/>
+      <arg column="lat" javaType="_double"/>
+      <arg column="lng" javaType="_double"/>
+      <arg column="type_code" javaType="string"/>
+      <arg column="type_name" javaType="string"/>
+    </constructor>
+  </resultMap>
+
+  <select id="findMarkers" resultMap="festivalMarker">
+    SELECT f.festival_id AS id, f.festival_name AS name,
+           f.latitude AS lat, f.longitude AS lng,
+           f.type_code, t.marker_image AS icon_url,
+           f.start_date, f.end_date
+      FROM festival f
+      JOIN festival_type t ON t.type_code = f.type_code
+    <where>
+      <if test="keyword != null and keyword != ''">
+        AND f.festival_name ILIKE '%' || #{keyword} || '%'
+      </if>
+      <if test="startDate != null">AND f.end_date &gt;= #{startDate}</if>
+      <if test="endDate != null">AND f.start_date &lt;= #{endDate}</if>
+      <if test="sido != null and sido != ''">AND f.sido = #{sido}</if>
+      <if test="types != null and types.size() > 0">
+        AND f.type_code IN
+        <foreach collection="types" item="typeCode" open="(" separator="," close=")">
+          #{typeCode}
+        </foreach>
+      </if>
+    </where>
+    ORDER BY f.start_date, f.festival_id
+  </select>
+
+  <select id="findById" resultMap="festivalDetail">
+    SELECT f.festival_id AS id, f.festival_name AS name, f.venue, f.road_addr,
+           f.start_date, f.end_date, f.content, f.host_org, f.mng_org,
+           f.latitude AS lat, f.longitude AS lng, f.type_code, t.type_name
+      FROM festival f
+      JOIN festival_type t ON t.type_code = f.type_code
+     WHERE f.festival_id = #{id}
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO festival
+      (festival_name, venue, start_date, end_date, content, host_org, mng_org,
+       road_addr, lot_addr, sido, sigungu, latitude, longitude, type_code)
+    VALUES
+      (#{name}, #{venue}, #{startDate}, #{endDate}, #{content}, #{hostOrg}, #{mngOrg},
+       #{roadAddr}, #{lotAddr}, #{sido}, #{sigungu}, #{latitude}, #{longitude}, #{typeCode})
+    ON CONFLICT (festival_name, start_date, venue)
+    DO UPDATE SET end_date = EXCLUDED.end_date, content = EXCLUDED.content,
+                  host_org = EXCLUDED.host_org, mng_org = EXCLUDED.mng_org,
+                  road_addr = EXCLUDED.road_addr, lot_addr = EXCLUDED.lot_addr,
+                  sido = EXCLUDED.sido, sigungu = EXCLUDED.sigungu,
+                  latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
+                  type_code = EXCLUDED.type_code, updated_at = now()
+  </insert>
+</mapper>

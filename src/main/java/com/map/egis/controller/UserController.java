@@ -45,19 +45,19 @@ public class UserController {
     // 📄 로그인 페이지 요청 Handling
     @GetMapping("/login")
     public String loginPage() {
-        return "forward:/src/components/login.html";
+        return "forward:/components/login.html";
     }
 
     // 📄 메인 페이지 요청 Handling
     @GetMapping("/main")
     public String mainPage() {
-        return "forward:/src/components/index.html";
+        return "forward:/components/3DMB.html";
     }
 
     // 회원가입 페이지 이동
     @GetMapping("/register")
     public String registerPage() {
-        return "forward:/src/components/register.html";
+        return "forward:/components/register.html";
     }
 
     // 회원가입 요청 처리

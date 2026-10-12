@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+application-local.yaml
+logs/
+excel/전국문화축제표준데이터.csv

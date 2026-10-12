@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.map.egis.festival.mapper.ImportHistoryMapper">
+  <resultMap id="importHistory" type="com.map.egis.festival.dto.ImportHistoryDto">
+    <constructor>
+      <idArg column="import_id" javaType="_long"/>
+      <arg column="file_name" javaType="string"/>
+      <arg column="total_rows" javaType="_int"/>
+      <arg column="success_rows" javaType="_int"/>
+      <arg column="skipped_rows" javaType="_int"/>
+      <arg column="imported_at" javaType="java.time.LocalDateTime"/>
+    </constructor>
+  </resultMap>
+  <insert id="insert">
+    INSERT INTO import_history (file_name, total_rows, success_rows, skipped_rows)
+    VALUES (#{fileName}, #{totalRows}, #{successRows}, #{skippedRows})
+  </insert>
+  <select id="findRecent" resultMap="importHistory">
+    SELECT import_id, file_name, total_rows, success_rows, skipped_rows, imported_at
+      FROM import_history
+     ORDER BY imported_at DESC, import_id DESC
+     LIMIT 20
+  </select>
+</mapper>

@@ -1,5 +1,7 @@
 # 의존성 설정. 외부 시스템과의 연동을 위해 필요한 라이브러리들을 정의  
 spring:
+  config:
+    import: optional:file:./application-local.yaml
   application:
     name: egis
 
@@ -30,3 +32,17 @@ app:
     redirect-uri: ${OIDC_REDIRECT_URI:http://localhost:8080/oauth2/callback}
   storage:
     root: storage
+
+server:
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/css,text/javascript,application/javascript
+
+logging:
+  file:
+    name: ${LOG_FILE:logs/egis.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_FILE_PATTERN:logs/egis.%d{yyyy-MM-dd}.%i.log.gz}
+      max-history: 14
+      max-file-size: 10MB

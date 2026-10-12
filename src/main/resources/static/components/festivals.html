@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a43">
+  <title>전국 문화축제 지도</title>
+  <link rel="stylesheet" href="/components/festival.css">
+</head>
+<body>
+  <main class="festival-app">
+    <div id="map" aria-label="전국 문화축제 3D 지도"></div>
+    <div class="map-scrim"></div>
+
+    
+    <header class="topbar">
+      <a class="brand" href="/festivals" aria-label="전국 문화축제 지도 홈">
+        <span class="brand-mark">F</span>
+        <span><strong>FESTIVAL MAP</strong><small>전국 문화축제 지도</small></span>
+      </a>
+      <div class="topbar-actions">
+        <span class="live-badge"><i></i> 표준데이터 기반</span>
+        <a href="/main">3D Memory Box</a>
+      </div>
+    </header>
+
+    <aside class="search-panel" aria-label="축제 검색">
+      <div class="panel-intro">
+        <p class="eyebrow">FIND YOUR FESTIVAL</p>
+        <h1>축제를 발견하세요</h1>
+        <p>기간과 지역, 취향에 맞는 축제를 지도에서 찾아보세요.</p>
+      </div>
+      <form id="search-form">
+        <label class="field-label" for="keyword">축제명</label>
+        <input id="keyword" name="keyword" type="search" placeholder="축제 이름을 검색하세요">
+        <div class="date-grid">
+          <label><span class="field-label">시작일</span><input name="startDate" type="date"></label>
+          <label><span class="field-label">종료일</span><input name="endDate" type="date"></label>
+        </div>
+        <label class="field-label" for="sido">지역</label>
+        <select id="sido" name="sido"><option value="">전국</option></select>
+        <fieldset class="type-fieldset">
+          <legend class="field-label">축제 유형</legend>
+          <div id="festival-types" class="type-options"></div>
+        </fieldset>
+        <div class="form-actions">
+          <button class="reset-button" id="reset-search" type="reset">초기화</button>
+          <button class="search-button" type="submit"><span>축제 찾기</span><span aria-hidden="true">↗</span></button>
+        </div>
+      </form>
+      <section class="results-section" aria-label="검색 결과">
+        <div class="results-heading">
+          <div><p class="eyebrow">SEARCH RESULTS</p><h2>축제 목록</h2></div>
+          <strong id="result-count">0<span>건</span></strong>
+        </div>
+        <p class="result-hint" id="result-message" role="status" aria-live="polite">축제 정보를 불러오는 중입니다.</p>
+        <ul class="result-list" id="result-list"></ul>
+      </section>
+      <footer><span>© 전국 문화축제 지도</span><a href="/admin">관리자</a></footer>
+    </aside>
+
+    <div id="festival-marker-container" class="festival-marker-container" aria-label="지도 축제 마커"></div>
+    <div class="map-tools">
+      <button id="home-view" type="button" aria-label="전국 보기" title="전국 보기">⌂</button>
+      <button id="fullscreen" type="button" aria-label="전체 화면" title="전체 화면">⛶</button>
+    </div>
+    <p id="map-status" class="map-status" role="status">지도를 준비하고 있습니다.</p>
+    <div id="festival-info-container" class="festival-info-container" aria-live="polite"></div>
+    <div id="map-loader" class="map-loader">
+      <span class="loader-ring"></span>
+      <span id="map-loader-message">3D 지도를 불러오는 중</span>
+      <button id="map-loader-retry" class="loader-retry" type="button" hidden>다시 시도</button>
+    </div>
+  </main>
+  <script src="/js/engine/XDWorldEM.js" defer></script>
+  <script src="/js/module.js" defer></script>
+  <script type="module" src="/js/festivalLogic.js"></script>
+</body>
+</html>
