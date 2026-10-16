@@ -4,7 +4,7 @@ import { renderCapsuleBillboard, setCapsuleMarkersVisible } from '../api/markerR
 import { BoundsDetector } from '../utils/boundsDetector.js';
 import { CapsuleFormHandler } from '../utils/capsuleForm.js';
 import { DetailModal } from '../utils/detailModal.js';
-
+ 
 let csrfToken = '';
 /**
  * 🔑 세션 확인 및 localStorage 동기화
